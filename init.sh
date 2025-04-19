@@ -4,9 +4,10 @@
 set -xe
 mkdir -p ./LOWER/sbin ./LOWER/lib ./LOWER/usr/bin ./LOWER/usr/lib ./LOWER/usr/include ./LOWER/usr/share ./LOWER/usr/src ./LOWER/usr/sbin \
     ./LOWER/usr/local/bin ./LOWER/usr/local/lib ./LOWER/usr/local/etc ./LOWER/usr/local/share ./LOWER/usr/local/include \
-    ./LOWER/etc ./LOWER/tmp ./LOWER/run ./LOWER/var/log ./LOWER/var/cache ./LOWER/var/spool ./LOWER/opt ./LOWER/home ./LOWER/root ./LOWER/bin
+    ./LOWER/etc ./LOWER/tmp ./LOWER/run ./LOWER/var/log ./LOWER/var/cache ./LOWER/var/spool ./LOWER/opt ./LOWER/home ./LOWER/root 
 
-cp ./busybox ./LOWER/bin/
+cp setup.sh ./LOWER/home
+chmod +x ./LOWER/home/setup.sh
 
 busybox --install -s
 echo "tester:x:0:0::/tester:/bin/bash" > ./LOWER/etc/passwd
