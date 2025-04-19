@@ -14,6 +14,15 @@ cleanup() {
 # Clean up from previous runs
 cleanup
 
+addfiles() {
+    mkdir LOWER
+    mkdir LOWER/home
+    for file in "$@"; do
+        echo "Copying $file to ./LOWER/home..."
+        cp -r "$file" ./LOWER/home/tester
+    done
+}
+
 dothings(){
     # Prepare the directories
     mkdir -p LOWER UPPER WORK
@@ -55,6 +64,26 @@ EOF
     echo "Starting sandbox..."
     unshare -mipunUrf chroot ROOTFS /init
 }
+
+
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--files)
+            shift
+            files_to_copy=()
+            while [[ $# -gt 0 && "$1" != -* ]]; do
+                files_to_copy+=("$1")
+                shift
+            done
+            addfiles "${files_to_copy[@]}"
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 # Run the sandbox
 dothings
