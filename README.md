@@ -13,5 +13,6 @@ yum install -y fuse3 fuse-overlayfs # for Red Hat
 # all is to be run in project folder
 chmod +x busybox
 chmod +x script.sh init.sh
-./script.sh -f | --files file1 file2 dir1 dir2 # it is prefferable to use absolute paths. these files and directories will be available in /home/tester in the new fs
+./script.sh -f | --files file1 file2 dir1 dir2 # it is prefferable to use absolute paths.
+# these files and directories will be available in /home/tester in the new fs
 ```
