@@ -1,78 +1,63 @@
 #!/bin/bash
 set -e
-homedir=$(pwd)
-
-unshare --mount --uts --pid --user --map-root-user --fork -- bash
-
-startup() {
-    # useradd -N -m tester &> /dev/null || true
-    # passwd -d tester &> /dev/null
-
-    dd if=/dev/zero of=/home/tester/img bs=1M count=100
-   	mkfs.ext4 /home/tester/img
-
-    LOOPDEV=$(sudo losetup --find --show /home/tester/img)
-
-    mkdir -p /mnt/sandbox
-    mount "$LOOPDEV" /mnt/sandbox
-
-    # Setup basic dirs
-    mkdir -p /mnt/sandbox/{bin,proc,sys,dev,home,tester}
-
-    # Install busybox
-    cp busybox /mnt/sandbox/bin/
-    chmod +x /mnt/sandbox/bin/busybox
-}
-
-fsinit() {
-    # Build basic rootfs
-    cat <<EOF | sudo tee /mnt/sandbox/init.sh > /dev/null
-#!/bin/busybox sh
-set -xe
-
-# Create dirs
-mkdir -p /proc /sys /dev /etc /home/tester
-
-# Install busybox
-/bin/busybox --install -s
-
-# Create passwd/group entries with tester as root
-echo "tester:x:0:0::/home/tester:/bin/sh" > /etc/passwd
-echo "root:x:0:" > /etc/group
-echo "127.0.0.1 localhost" > /etc/hosts
-
-cd /home/tester
-exec /bin/sh
-EOF
-
-    chmod +x /mnt/sandbox/init.sh
-}
-
-enter_chroot() {
-    chroot --userspec=0:0 /mnt/sandbox /init.sh
-}
+pwd=$(pwd)
 
 cleanup() {
-    echo "[*] Cleaning up..."
-
-    # Kill anything still using sandbox
-    fuser -k /mnt/sandbox || true
-
-    # Lazy unmount everything inside
-    umount -l /mnt/sandbox/* 2>/dev/null || true
-    umount -l /mnt/sandbox || true
-
-    # Detach loop devices
-    losetup -D
-
-    # Clean image and dirs
-    rm -rf /home/tester/img
-    rmdir -rf /mnt/sandbox 2>/dev/null || true
-
-    # Remove user
-    #userdel -r tester 2>/dev/null || true
+    # Only attempt to unmount if the directory exists and is mounted
+    if [ -d ROOTFS ] && mountpoint -q ROOTFS 2>/dev/null; then
+        fusermount3 -u ROOTFS
+    fi
+    # Clean up directories but don't fail if they don't exist
+    rm -rf ROOTFS UPPER WORK LOWER 2>/dev/null || true
 }
 
+# Clean up from previous runs
+cleanup
 
-# Run in order
+dothings(){
+    # Prepare the directories
+    mkdir -p LOWER UPPER WORK
+    mkdir -p ROOTFS
+    chmod 755 ROOTFS
+    
+    # Add busybox to ROOTFS so it can be seen before overlay
+    mkdir -p ROOTFS/bin
+    cp ./busybox ROOTFS/bin/
+    chmod +x ./ROOTFS/bin/busybox
+    
+    # Call init.sh to prepare LOWER
+    chmod +x ./init.sh
+    ./init.sh
+
+
+    # Mount overlay as unprivileged user
+    fuse-overlayfs -o lowerdir="$pwd"/LOWER,upperdir="$pwd"/UPPER,workdir="$pwd"/WORK "$pwd"/ROOTFS
+    
+    # Fix ownership (VERY IMPORTANT for user namespace + FUSE)
+    chown -R $(id -u):$(id -g) LOWER UPPER WORK ROOTFS
+
+    cat > ROOTFS/init << 'EOF'
+#!/bin/busybox sh
+export PATH=/bin:/sbin
+/bin/busybox mount -t proc proc /proc
+/bin/busybox mount -t sysfs sys /sys
+/bin/busybox mount -t tmpfs tmpfs /tmp
+echo "✅ Welcome to your unprivileged sandbox!"
+
+exec /bin/busybox sh
+EOF
+    chmod +x ROOTFS/init
+
+    ls -la ROOTFS/init
+    
+    
+    # Run sandbox with properly mounted filesystems
+    echo "Starting sandbox..."
+    unshare -mipunUrf chroot ROOTFS /init
+}
+
+# Run the sandbox
+dothings
+
+# Clean up after exit
 cleanup
